@@ -8,8 +8,8 @@ describe('VueOfficePdf 发布契约', () => {
       await readFile(resolve(process.cwd(), 'package.json'), 'utf8')
     )
 
-    expect(packageJson.name).toBe('@formachaca/vue-office-pdf')
-    expect(packageJson.version).toBe('2.0.11')
+    expect(packageJson.name).toBe('vue-office-pdf-isolated')
+    expect(packageJson.version).toBe('0.0.1')
     expect(packageJson.type).toBe('module')
     expect(packageJson.exports).toEqual({
       '.': {

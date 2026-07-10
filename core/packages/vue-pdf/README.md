@@ -1,4 +1,4 @@
-# @formachaca/vue-office-pdf
+# vue-office-pdf-isolated
 
 Vue 3 PDF preview component with a package-private PDF.js runtime.
 
@@ -11,7 +11,7 @@ Vue 3 PDF preview component with a package-private PDF.js runtime.
 
 ## Usage
 
-    import VueOfficePdf from '@formachaca/vue-office-pdf'
+    import VueOfficePdf from 'vue-office-pdf-isolated'
 
     app.component('VueOfficePdf', VueOfficePdf)
 

@@ -1,6 +1,6 @@
 {
-  "name": "@formachaca/vue-office-pdf",
-  "version": "2.0.11",
+  "name": "vue-office-pdf-isolated",
+  "version": "0.0.1",
   "description": "Vue 3 PDF preview with an isolated PDF.js runtime",
   "type": "module",
   "main": "./lib/index.js",
