@@ -1,16 +1,25 @@
 <script>
-import { defineComponent, ref, onMounted, watch, onBeforeUnmount } from 'vue-demi';
-import workerStr from './worker?raw';
-import pdfjsLib from './pdf?raw';
-import { download as downloadFile, getUrl, loadScript } from '../../../utils/url';
-import { base64_encode } from '../../../utils/base64';
+import { defineComponent, ref, onMounted, watch, onBeforeUnmount } from 'vue';
+import { download as downloadFile, getUrl } from '../../../utils/url';
 import omit from 'lodash/omit';
 import {debounce} from "lodash/function";
 
-const pdfJsLibSrc = `data:text/javascript;base64,${(base64_encode(pdfjsLib))}`;
-const PdfJsWorkerSrc = `data:text/javascript;base64,${(base64_encode(workerStr))}`;
-let pdfJsLibLoaded = false;
-let workerLoaded = false;
+let pdfjsLibPromise;
+
+function loadPdfjsLib() {
+    if (!pdfjsLibPromise) {
+        pdfjsLibPromise = Promise.all([
+            import('pdfjs-dist/legacy/build/pdf.mjs'),
+            import('virtual:pdfjs-worker-url')
+        ]).then(([pdfjsLib, { default: workerSrc }]) => {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
+            return pdfjsLib;
+        });
+    }
+
+    return pdfjsLibPromise;
+}
+
 export default defineComponent({
     name: 'VueOfficePdf',
     props: {
@@ -21,7 +30,7 @@ export default defineComponent({
         },
         staticFileUrl: {
             type: String,
-            default: 'https://unpkg.com/pdfjs-dist@3.1.81/'
+            default: 'https://unpkg.com/pdfjs-dist@5.7.284/'
         },
         options: {
             type: Object,
@@ -50,8 +59,6 @@ export default defineComponent({
         let canvasWidth = 0; //画布的尺寸-宽
         let canvasHeight = 0; //画布的尺寸-高
 
-        let loopCheckTimer = null;
-
         let getViewportScale = 2;
         let userScale = ref(props.options.defaultScale || 1);
 
@@ -62,7 +69,6 @@ export default defineComponent({
             pdfDocument.destroy();
             pdfDocument = null;
             loadingTask = null;
-            loopCheckTimer && clearTimeout(loopCheckTimer);
         });
         function getScale(){
             return userScale;
@@ -71,52 +77,17 @@ export default defineComponent({
             userScale.value = scale;
             init();
         }
-        function installPdfScript() {
-            return loadScript(pdfJsLibSrc).then(() => {
-                if (window.pdfjsLib && !workerLoaded) {
-                    workerLoaded = true;
-                    window.pdfjsLib.GlobalWorkerOptions.workerSrc = PdfJsWorkerSrc;
-                } else {
-                    return Promise.reject('window.pdfjsLib未找到');
-                }
-            });
-        }
-
-        function waitPdfjsLoad(){
-            return new Promise((resolve)=>{
-                const loopCheck = () =>{
-                    if(window.pdfjsLib) {
-                        resolve();
-                    }else{
-                        loopCheckTimer = setTimeout(loopCheck, 10);
-                    }
-                };
-                loopCheck();
-            });
-        }
-        function checkPdfLib() {
-            if (window.pdfjsLib) {
-                return Promise.resolve();
-            }
-            if(!pdfJsLibLoaded){
-                pdfJsLibLoaded = true;
-                return installPdfScript();
-            }else{
-                return waitPdfjsLoad();
-            }
-
-        }
-
         function clearCanvas(){
             wrapperRef.value.innerHTML = '';
         }
-        function init() {
+        async function init() {
             if (!props.src) {
                 clearCanvas();
                 emit('error', new Error('src不能为空'))
                 return;
             }
-            loadingTask = window.pdfjsLib.getDocument({
+            const pdfjsLib = await loadPdfjsLib();
+            loadingTask = pdfjsLib.getDocument({
                 url: getUrl(props.src, { type: 'application/pdf' }),
                 // httpHeaders: props.requestOptions && props.requestOptions.headers,
                 withCredentials: props.requestOptions && props.requestOptions.withCredentials,
@@ -305,16 +276,12 @@ export default defineComponent({
         }
         onMounted(() => {
             if (props.src) {
-                checkPdfLib().then(init).catch(e => {
-                    console.warn(e);
-                });
+                init().catch(e => emit('error', e));
             }
         });
 
         watch(() => props.src, () => {
-            checkPdfLib().then(init).catch(e => {
-                console.warn(e);
-            });
+            init().catch(e => emit('error', e));
         });
         function save(fileName) {
             pdfDocument && pdfDocument._transport && pdfDocument._transport.getData().then(fileData => {

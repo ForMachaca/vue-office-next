@@ -11,7 +11,7 @@
     "lib:vue-excel": "node script/bak-vue.js bak && lerna run build --scope @vue-office/excel",
     "lib:vue-docx": "node script/bak-vue.js bak && lerna run build --scope @vue-office/docx",
     "lib:js-pdf": "node script/bak-vue.js bak && lerna run build --scope @js-preview/pdf",
-    "lib:vue-pdf": "node script/bak-vue.js bak && lerna run build --scope @vue-office/pdf",
+    "lib:vue-pdf": "npm run build --workspace @formachaca/vue-office-pdf",
     "lib:vue-pptx": "node script/bak-vue.js bak && lerna run build --scope @vue-office/pptx"
   },
   "dependencies": {

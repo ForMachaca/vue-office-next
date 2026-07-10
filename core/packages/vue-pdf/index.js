@@ -1,7 +1,7 @@
 import VueOfficePdf from './src/main.vue';
 
-VueOfficePdf.install = function (Vue) {
-    Vue.component(VueOfficePdf.name, VueOfficePdf);
+VueOfficePdf.install = function (app) {
+    app.component(VueOfficePdf.name, VueOfficePdf);
 };
 
 export default VueOfficePdf;
