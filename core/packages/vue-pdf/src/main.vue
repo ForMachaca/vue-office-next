@@ -3,22 +3,7 @@ import { defineComponent, ref, onMounted, watch, onBeforeUnmount } from 'vue';
 import { download as downloadFile, getUrl } from '../../../utils/url';
 import omit from 'lodash/omit';
 import {debounce} from "lodash/function";
-
-let pdfjsLibPromise;
-
-function loadPdfjsLib() {
-    if (!pdfjsLibPromise) {
-        pdfjsLibPromise = Promise.all([
-            import('pdfjs-dist/legacy/build/pdf.mjs'),
-            import('virtual:pdfjs-worker-url')
-        ]).then(([pdfjsLib, { default: workerSrc }]) => {
-            pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
-            return pdfjsLib;
-        });
-    }
-
-    return pdfjsLibPromise;
-}
+import { createDocumentOptions, loadPdfjsLib } from 'virtual:vue-office-pdf-runtime';
 
 export default defineComponent({
     name: 'VueOfficePdf',
@@ -87,7 +72,7 @@ export default defineComponent({
                 return;
             }
             const pdfjsLib = await loadPdfjsLib();
-            loadingTask = pdfjsLib.getDocument({
+            loadingTask = pdfjsLib.getDocument(createDocumentOptions({
                 url: getUrl(props.src, { type: 'application/pdf' }),
                 // httpHeaders: props.requestOptions && props.requestOptions.headers,
                 withCredentials: props.requestOptions && props.requestOptions.withCredentials,
@@ -95,7 +80,7 @@ export default defineComponent({
                 cMapPacked: true,
                 enableXfa: true,
                 ...omit(props.options, ['width'])
-            });
+            }));
             loadingTask.promise.then((pdf) => {
                 pdfDocument && pdfDocument.destroy();
                 pdfDocument = pdf;

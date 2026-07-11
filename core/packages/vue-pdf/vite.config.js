@@ -1,15 +1,18 @@
 import { defineConfig } from 'vite';
 import vue from '@vitejs/plugin-vue';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { resolve } from 'node:path';
+import { dirname, resolve } from 'node:path';
 
 const require = createRequire(import.meta.url);
+const pdfjsDirectory = dirname(require.resolve('pdfjs-dist/package.json'));
 const pdfWorkerPath = require.resolve(
   'pdfjs-dist/legacy/build/pdf.worker.min.mjs'
 );
 const pdfWorkerVirtualId = 'virtual:pdfjs-worker-url';
 const resolvedPdfWorkerVirtualId = '\0' + pdfWorkerVirtualId;
+const compatResourcesVirtualId = 'virtual:pdfjs-compat-resources';
+const resolvedCompatResourcesVirtualId = '\0' + compatResourcesVirtualId;
 
 function emitPdfWorker() {
   let workerReferenceId;
@@ -36,6 +39,56 @@ function emitPdfWorker() {
         workerReferenceId +
         ';'
       );
+    }
+  };
+}
+
+function emitCompatResources() {
+  const resourceDirectories = {
+    cMapUrl: 'cmaps',
+    standardFontDataUrl: 'standard_fonts',
+    wasmUrl: 'wasm'
+  };
+  const resourceReferences = {};
+
+  return {
+    name: 'emit-pdfjs-compat-resources',
+    apply: 'build',
+    buildStart() {
+      for (const [kind, directoryName] of Object.entries(resourceDirectories)) {
+        const directory = resolve(pdfjsDirectory, directoryName);
+        resourceReferences[kind] = Object.fromEntries(
+          readdirSync(directory).map((filename) => [
+            filename,
+            this.emitFile({
+              type: 'asset',
+              fileName: `assets/${directoryName}/${filename}`,
+              source: readFileSync(resolve(directory, filename))
+            })
+          ])
+        );
+      }
+    },
+    resolveId(id) {
+      return id === compatResourcesVirtualId
+        ? resolvedCompatResourcesVirtualId
+        : null;
+    },
+    load(id) {
+      if (id !== resolvedCompatResourcesVirtualId) {
+        return null;
+      }
+
+      const entries = Object.entries(resourceReferences).map(
+        ([kind, references]) => {
+          const files = Object.entries(references).map(
+            ([filename, referenceId]) =>
+              `${JSON.stringify(filename)}: import.meta.ROLLUP_FILE_URL_${referenceId}`
+          );
+          return `${JSON.stringify(kind)}: {${files.join(',')}}`;
+        }
+      );
+      return `export default {${entries.join(',')}};`;
     }
   };
 }
@@ -71,23 +124,44 @@ function isolatePdfjsGlobal() {
   };
 }
 
-export default defineConfig({
-  plugins: [emitPdfWorker(), isolatePdfjsGlobal(), vue()],
-  build: {
-    target: 'es2020',
-    outDir: 'lib',
-    emptyOutDir: true,
-    lib: {
-      entry: resolve(import.meta.dirname, 'index.js'),
-      formats: ['es'],
-      fileName: () => 'index.js'
+export default defineConfig(({ mode }) => {
+  const isCompat = mode === 'compat';
+
+  return {
+    base: './',
+    resolve: {
+      alias: {
+        'virtual:vue-office-pdf-runtime': resolve(
+          import.meta.dirname,
+          isCompat ? 'src/runtime/compat.js' : 'src/runtime/modern.js'
+        )
+      }
     },
-    rollupOptions: {
-      external: ['vue'],
-      output: {
-        chunkFileNames: 'chunks/[name]-[hash].js',
-        assetFileNames: 'assets/[name]-[hash][extname]'
+    plugins: [
+      !isCompat && emitPdfWorker(),
+      isCompat && emitCompatResources(),
+      isolatePdfjsGlobal(),
+      vue()
+    ],
+    worker: {
+      format: 'es'
+    },
+    build: {
+      target: isCompat ? 'chrome102' : 'es2020',
+      outDir: isCompat ? 'lib/compat' : 'lib',
+      emptyOutDir: !isCompat,
+      lib: {
+        entry: resolve(import.meta.dirname, isCompat ? 'compat.js' : 'index.js'),
+        formats: ['es'],
+        fileName: () => 'index.js'
+      },
+      rollupOptions: {
+        external: ['vue'],
+        output: {
+          chunkFileNames: 'chunks/[name]-[hash].js',
+          assetFileNames: 'assets/[name]-[hash][extname]'
+        }
       }
     }
-  }
+  };
 });

@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitest/config'
 import vue from '@vitejs/plugin-vue'
+import { resolve } from 'node:path'
 
 const pdfWorkerVirtualId = 'virtual:pdfjs-worker-url'
 const resolvedPdfWorkerVirtualId = '\0' + pdfWorkerVirtualId
@@ -15,8 +16,30 @@ const pdfWorkerStub = {
   }
 }
 
+const compatResourcesVirtualId = 'virtual:pdfjs-compat-resources'
+const resolvedCompatResourcesVirtualId = '\0' + compatResourcesVirtualId
+const compatResourcesStub = {
+  name: 'pdf-compat-resources-stub',
+  resolveId(id) {
+    return id === compatResourcesVirtualId
+      ? resolvedCompatResourcesVirtualId
+      : null
+  },
+  load(id) {
+    return id === resolvedCompatResourcesVirtualId ? 'export default {}' : null
+  }
+}
+
 export default defineConfig({
-  plugins: [pdfWorkerStub, vue()],
+  resolve: {
+    alias: {
+      'virtual:vue-office-pdf-runtime': resolve(
+        import.meta.dirname,
+        'src/runtime/modern.js'
+      )
+    }
+  },
+  plugins: [pdfWorkerStub, compatResourcesStub, vue()],
   test: {
     environment: 'jsdom',
     include: ['test/**/*.test.js']

@@ -20,10 +20,21 @@ describe('VueOfficePdf 构建隔离', () => {
   const libDirectory = resolve(process.cwd(), 'lib')
 
   beforeAll(async () => {
-    await build({
-      configFile: resolve(process.cwd(), 'vite.config.js'),
-      logLevel: 'silent'
-    })
+    const nodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'production'
+    try {
+      await build({
+        configFile: resolve(process.cwd(), 'vite.config.js'),
+        logLevel: 'silent'
+      })
+      await build({
+        configFile: resolve(process.cwd(), 'vite.config.js'),
+        logLevel: 'silent',
+        mode: 'compat'
+      })
+    } finally {
+      process.env.NODE_ENV = nodeEnv
+    }
   })
 
   it('输出私有 PDF chunk 和独立 worker，且不读写 pdfjsLib 全局', async () => {
@@ -49,6 +60,49 @@ describe('VueOfficePdf 构建隔离', () => {
     expect(javascript).not.toContain('data:text/javascript')
     expect(javascript).not.toContain(
       'pdfjs-dist/legacy/build/pdf.mjs'
+    )
+  })
+
+  it('输出 Chromium 102 compat 入口、worker 和自包含资源', async () => {
+    const files = await listFiles(libDirectory)
+    const relativeFiles = files.map((file) =>
+      file.slice(libDirectory.length + 1)
+    )
+    const compatJavascript = (
+      await Promise.all(
+        files
+          .filter(
+            (file) =>
+              file.startsWith(resolve(libDirectory, 'compat')) &&
+              file.endsWith('.js')
+          )
+          .map((file) => readFile(file, 'utf8'))
+      )
+    ).join('\n')
+    const compatEntry = await readFile(
+      resolve(libDirectory, 'compat/index.js'),
+      'utf8'
+    )
+
+    expect(relativeFiles).toContain('compat/index.js')
+    expect(
+      relativeFiles.some((file) =>
+        /^compat\/assets\/pdf\.worker\.min-.*\.js$/.test(file)
+      )
+    ).toBe(true)
+    expect(relativeFiles).toContain(
+      'compat/assets/cmaps/Adobe-CNS1-0.bcmap'
+    )
+    expect(relativeFiles).toContain(
+      'compat/assets/standard_fonts/FoxitFixed.pfb'
+    )
+    expect(relativeFiles).toContain('compat/assets/wasm/openjpeg.wasm')
+    expect(compatJavascript).toContain('5.7.284')
+    expect(compatJavascript).not.toContain('globalThis.pdfjsLib')
+    expect(compatJavascript).not.toContain('/Users/')
+    expect(compatEntry).not.toContain('new Worker("/assets/')
+    expect(compatEntry).toMatch(
+      /new Worker\(\s*(?:"" \+ )?new URL\("assets\/pdf\.worker\.min-.*\.js", import\.meta\.url\)\.href/
     )
   })
 })

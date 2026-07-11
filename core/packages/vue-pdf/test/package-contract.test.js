@@ -9,12 +9,16 @@ describe('VueOfficePdf 发布契约', () => {
     )
 
     expect(packageJson.name).toBe('vue-office-pdf-isolated')
-    expect(packageJson.version).toBe('0.0.1')
+    expect(packageJson.version).toBe('0.0.2')
     expect(packageJson.type).toBe('module')
     expect(packageJson.exports).toEqual({
       '.': {
         types: './lib/index.d.ts',
         import: './lib/index.js'
+      },
+      './compat': {
+        types: './lib/compat/index.d.ts',
+        import: './lib/compat/index.js'
       }
     })
     expect(packageJson.peerDependencies).toEqual({

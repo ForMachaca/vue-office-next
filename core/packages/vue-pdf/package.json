@@ -1,6 +1,6 @@
 {
   "name": "vue-office-pdf-isolated",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Vue 3 PDF preview with an isolated PDF.js runtime",
   "type": "module",
   "main": "./lib/index.js",
@@ -10,6 +10,10 @@
     ".": {
       "types": "./lib/index.d.ts",
       "import": "./lib/index.js"
+    },
+    "./compat": {
+      "types": "./lib/compat/index.d.ts",
+      "import": "./lib/compat/index.js"
     }
   },
   "files": [
@@ -21,7 +25,7 @@
   ],
   "scripts": {
     "test": "vitest run",
-    "build": "vite build && cp index.d.ts lib/index.d.ts"
+    "build": "vite build && vite build --mode compat && cp index.d.ts lib/index.d.ts && cp index.d.ts lib/compat/index.d.ts"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.2.4",
