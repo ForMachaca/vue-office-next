@@ -1,6 +1,6 @@
 {
   "name": "vue-office-pdf-isolated",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Vue 3 PDF preview with an isolated PDF.js runtime",
   "type": "module",
   "main": "./lib/index.js",

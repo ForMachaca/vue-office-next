@@ -129,7 +129,8 @@ export default defineComponent({
                     domWidth = Math.floor(props.options.width);
                     domHeight = Math.floor(domHeight * scale);
                 }
-                let wrapperWidth = wrapperRef.value.getBoundingClientRect().width - 20;
+                // 缩小时 clamp 基准同步缩小，保证展示宽度随 userScale 线性变化（否则 <1 的缩放会被 clamp 回容器宽度而不生效）
+                let wrapperWidth = (wrapperRef.value.getBoundingClientRect().width - 20) * (userScale.value < 1 ? userScale.value : 1);
                 if (domWidth > wrapperWidth) {
                     let scale = wrapperWidth / domWidth;
                     domWidth = Math.floor(wrapperWidth);
