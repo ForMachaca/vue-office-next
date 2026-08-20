@@ -38,6 +38,7 @@ describe('VueOfficePdf PDF.js 隔离', () => {
   let app
 
   beforeEach(() => {
+    pdfMocks.pdfDocument.numPages = 1
     pdfMocks.getDocument.mockReset()
     pdfMocks.getDocument.mockReturnValue({
       promise: Promise.resolve(pdfMocks.pdfDocument)
@@ -96,6 +97,23 @@ describe('VueOfficePdf PDF.js 隔离', () => {
         wasmUrl: '/pdfjs/wasm/'
       })
     )
+  })
+
+  it('渲染后通过组件实例暴露实际 PDF 页数', async () => {
+    pdfMocks.pdfDocument.numPages = 3
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({})
+    const rendered = vi.fn()
+    const container = document.createElement('div')
+
+    app = createApp(VueOfficePdf, {
+      src: '/files/report.pdf',
+      onRendered: rendered
+    })
+    const instance = app.mount(container)
+
+    await vi.waitFor(() => expect(rendered).toHaveBeenCalled())
+
+    expect(instance.numPages).toBe(3)
   })
 
   it('私有 PDF.js 加载失败时通过 error 事件透传原始错误', async () => {

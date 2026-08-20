@@ -46,3 +46,17 @@ standardFontDataUrl, wasmUrl, useWorkerFetch, and BinaryDataFactory options to
 preserve that self-contained boundary.
 
 Vue 2 and CommonJS/UMD builds are not supported.
+
+## Publishing
+
+Run the following commands from the repository root:
+
+```sh
+cd core/packages/vue-pdf
+npm pkg get name version
+npm publish . --access public --registry=https://registry.npmjs.org
+```
+
+Confirm that `npm pkg get` reports `vue-office-pdf-isolated` before publishing.
+Do not run `npm publish` from the `core` directory because that directory is
+the `vue-office` package.

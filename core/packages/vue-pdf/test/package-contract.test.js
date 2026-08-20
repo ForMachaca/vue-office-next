@@ -9,7 +9,7 @@ describe('VueOfficePdf 发布契约', () => {
     )
 
     expect(packageJson.name).toBe('vue-office-pdf-isolated')
-    expect(packageJson.version).toBe('0.0.3')
+    expect(packageJson.version).toBe('0.0.4')
     expect(packageJson.type).toBe('module')
     expect(packageJson.exports).toEqual({
       '.': {

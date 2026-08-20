@@ -86,7 +86,8 @@ export default defineComponent({
                 pdfDocument = pdf;
 
                 getPageSize(pdfDocument).then(res =>{
-                    totalItems = pdfDocument.numPages;
+                    numPages.value = pdfDocument.numPages;
+                    totalItems = numPages.value;
                     containerHeight = containerRef.value.getBoundingClientRect().height
                     pageWidth = res.width;
                     pageHeight = res.height;
