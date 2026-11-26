@@ -16,17 +16,17 @@ const pdfWorkerStub = {
   }
 }
 
-const compatResourcesVirtualId = 'virtual:pdfjs-compat-resources'
-const resolvedCompatResourcesVirtualId = '\0' + compatResourcesVirtualId
-const compatResourcesStub = {
-  name: 'pdf-compat-resources-stub',
+const pdfResourcesVirtualId = 'virtual:pdfjs-resources'
+const resolvedPdfResourcesVirtualId = '\0' + pdfResourcesVirtualId
+const pdfResourcesStub = {
+  name: 'pdf-resources-stub',
   resolveId(id) {
-    return id === compatResourcesVirtualId
-      ? resolvedCompatResourcesVirtualId
+    return id === pdfResourcesVirtualId
+      ? resolvedPdfResourcesVirtualId
       : null
   },
   load(id) {
-    return id === resolvedCompatResourcesVirtualId ? 'export default {}' : null
+    return id === resolvedPdfResourcesVirtualId ? 'export default {}' : null
   }
 }
 
@@ -39,7 +39,7 @@ export default defineConfig({
       )
     }
   },
-  plugins: [pdfWorkerStub, compatResourcesStub, vue()],
+  plugins: [pdfWorkerStub, pdfResourcesStub, vue()],
   test: {
     environment: 'jsdom',
     include: ['test/**/*.test.js']

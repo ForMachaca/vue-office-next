@@ -11,10 +11,53 @@ const pdfWorkerPath = require.resolve(
 );
 const pdfWorkerVirtualId = 'virtual:pdfjs-worker-url';
 const resolvedPdfWorkerVirtualId = '\0' + pdfWorkerVirtualId;
-const compatResourcesVirtualId = 'virtual:pdfjs-compat-resources';
-const resolvedCompatResourcesVirtualId = '\0' + compatResourcesVirtualId;
+const pdfResourcesVirtualId = 'virtual:pdfjs-resources';
+const resolvedPdfResourcesVirtualId = '\0' + pdfResourcesVirtualId;
+const resourceDirectories = {
+  cMapUrl: 'cmaps',
+  standardFontDataUrl: 'standard_fonts',
+  wasmUrl: 'wasm'
+};
+const runtimeResourcePattern = /\.(bcmap|pfb|ttf)$|^(jbig2|openjpeg)\.wasm$/;
+const runtimeLicensePattern = /^LICENSE(_FOXIT|_LIBERATION|(_PDFJS)?_(JBIG2|OPENJPEG))?$/;
+const hostWorkerRead = 'globalThis.pdfjsWorker?.WorkerMessageHandler';
+const hostWorkerWrite = 'globalThis.pdfjsWorker={WorkerMessageHandler};';
 
-function emitPdfWorker() {
+function isPdfjsModule(id) {
+  return id.split('?')[0].endsWith('/pdfjs-dist/legacy/build/pdf.mjs');
+}
+
+function isolatePdfjsModule(code) {
+  const globalStart = code.lastIndexOf('\n{\n  globalThis._pdfjsTestingUtils = {');
+  const exportStart = code.indexOf('\nexport {', globalStart);
+  if (globalStart === -1 || exportStart === -1 || !code.includes(hostWorkerRead)) {
+    throw new Error('pdfjs-dist@5.7.284 global access points were not found');
+  }
+  return (code.slice(0, globalStart) + code.slice(exportStart)).replace(hostWorkerRead, 'null');
+}
+
+function isolatePdfjsWorker(code) {
+  if (!code.includes(hostWorkerWrite)) {
+    throw new Error('pdfjs-dist@5.7.284 worker global assignment was not found');
+  }
+  return code.replace(hostWorkerWrite, '');
+}
+
+function emitTypes() {
+  return {
+    name: 'emit-vue-office-pdf-types',
+    apply: 'build',
+    generateBundle() {
+      this.emitFile({
+        type: 'asset',
+        fileName: 'index.d.ts',
+        source: readFileSync(resolve(import.meta.dirname, 'index.d.ts'), 'utf8')
+      });
+    }
+  };
+}
+
+function emitPdfWorker(assetBaseDir) {
   let workerReferenceId;
 
   return {
@@ -23,8 +66,10 @@ function emitPdfWorker() {
     buildStart() {
       workerReferenceId = this.emitFile({
         type: 'asset',
-        name: 'pdf.worker.min.mjs',
-        source: readFileSync(pdfWorkerPath)
+        ...(assetBaseDir
+          ? { fileName: `${assetBaseDir}/pdf.worker.min.js` }
+          : { name: 'pdf.worker.min.js' }),
+        source: isolatePdfjsWorker(readFileSync(pdfWorkerPath, 'utf8'))
       });
     },
     resolveId(id) {
@@ -43,39 +88,36 @@ function emitPdfWorker() {
   };
 }
 
-function emitCompatResources() {
-  const resourceDirectories = {
-    cMapUrl: 'cmaps',
-    standardFontDataUrl: 'standard_fonts',
-    wasmUrl: 'wasm'
-  };
+function emitPdfResources(assetBaseDir) {
   const resourceReferences = {};
 
   return {
-    name: 'emit-pdfjs-compat-resources',
+    name: 'emit-pdfjs-resources',
     apply: 'build',
     buildStart() {
       for (const [kind, directoryName] of Object.entries(resourceDirectories)) {
         const directory = resolve(pdfjsDirectory, directoryName);
+        const files = readdirSync(directory);
+        const emit = (filename) => this.emitFile({
+          type: 'asset',
+          fileName: `${assetBaseDir}/${directoryName}/${filename}`,
+          source: readFileSync(resolve(directory, filename))
+        });
+        files.filter((filename) => runtimeLicensePattern.test(filename)).forEach(emit);
         resourceReferences[kind] = Object.fromEntries(
-          readdirSync(directory).map((filename) => [
-            filename,
-            this.emitFile({
-              type: 'asset',
-              fileName: `assets/${directoryName}/${filename}`,
-              source: readFileSync(resolve(directory, filename))
-            })
-          ])
+          files
+            .filter((filename) => runtimeResourcePattern.test(filename))
+            .map((filename) => [filename, emit(filename)])
         );
       }
     },
     resolveId(id) {
-      return id === compatResourcesVirtualId
-        ? resolvedCompatResourcesVirtualId
+      return id === pdfResourcesVirtualId
+        ? resolvedPdfResourcesVirtualId
         : null;
     },
     load(id) {
-      if (id !== resolvedCompatResourcesVirtualId) {
+      if (id !== resolvedPdfResourcesVirtualId) {
         return null;
       }
 
@@ -100,21 +142,11 @@ function isolatePdfjsGlobal() {
     name: 'isolate-pdfjs-global',
     enforce: 'pre',
     transform(code, id) {
-      if (!id.split('?')[0].endsWith('/pdfjs-dist/legacy/build/pdf.mjs')) {
+      if (!isPdfjsModule(id)) {
         return null;
       }
-
-      const globalStart = code.lastIndexOf('\n{\n  globalThis._pdfjsTestingUtils = {');
-      const exportStart = code.indexOf('\nexport {', globalStart);
-      if (globalStart === -1 || exportStart === -1) {
-        throw new Error('pdfjs-dist@5.7.284 global export block was not found');
-      }
-
       transformed = true;
-      return {
-        code: code.slice(0, globalStart) + code.slice(exportStart),
-        map: null
-      };
+      return { code: isolatePdfjsModule(code), map: null };
     },
     buildEnd(error) {
       if (!error && !transformed) {
@@ -122,6 +154,59 @@ function isolatePdfjsGlobal() {
       }
     }
   };
+}
+
+export function vueOfficePdfSource() {
+  const imports = [];
+  const resources = Object.entries(resourceDirectories).map(([kind, directoryName]) => {
+    const directory = resolve(pdfjsDirectory, directoryName);
+    const files = readdirSync(directory).filter((filename) => runtimeResourcePattern.test(filename)).map((filename) => {
+      const name = `resource${imports.length}`;
+      imports.push(`import ${name} from ${JSON.stringify(`${resolve(directory, filename)}?url`)};`);
+      return `${JSON.stringify(filename)}: ${name}`;
+    });
+    return `${JSON.stringify(kind)}: {${files.join(',')}}`;
+  });
+  const resourcesModule = `${imports.join('\n')}\nexport default {${resources.join(',')}};`;
+
+  return [
+    emitPdfWorker(),
+    {
+      name: 'vue-office-pdf-source-worker',
+      apply: 'serve',
+      resolveId(id) {
+        return id === pdfWorkerVirtualId ? resolvedPdfWorkerVirtualId : null;
+      },
+      load(id) {
+        return id === resolvedPdfWorkerVirtualId
+          ? `export { default } from ${JSON.stringify(`${pdfWorkerPath}?url`)};`
+          : null;
+      },
+      transform(code, id) {
+        const [file, query] = id.split('?');
+        return file.endsWith('/pdfjs-dist/legacy/build/pdf.worker.min.mjs') && !new URLSearchParams(query).has('url')
+          ? { code: isolatePdfjsWorker(code), map: null }
+          : null;
+      }
+    },
+    {
+      name: 'vue-office-pdf-source',
+      enforce: 'pre',
+      config: () => ({ optimizeDeps: { exclude: ['pdfjs-dist'] } }),
+      resolveId(id) {
+        if (id === 'virtual:vue-office-pdf-runtime') {
+          return resolve(import.meta.dirname, 'src/runtime/modern.js');
+        }
+        return id === pdfResourcesVirtualId ? resolvedPdfResourcesVirtualId : null;
+      },
+      load(id) {
+        return id === resolvedPdfResourcesVirtualId ? resourcesModule : null;
+      },
+      transform(code, id) {
+        return isPdfjsModule(id) ? { code: isolatePdfjsModule(code), map: null } : null;
+      }
+    }
+  ];
 }
 
 export default defineConfig(({ mode }) => {
@@ -138,14 +223,12 @@ export default defineConfig(({ mode }) => {
       }
     },
     plugins: [
-      !isCompat && emitPdfWorker(),
-      isCompat && emitCompatResources(),
+      emitPdfWorker(isCompat ? 'assets' : 'compat/assets'),
+      emitPdfResources(isCompat ? 'assets' : 'compat/assets'),
+      emitTypes(),
       isolatePdfjsGlobal(),
       vue()
     ],
-    worker: {
-      format: 'es'
-    },
     build: {
       target: isCompat ? 'chrome102' : 'es2020',
       outDir: isCompat ? 'lib/compat' : 'lib',

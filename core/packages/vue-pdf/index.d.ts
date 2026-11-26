@@ -1,4 +1,4 @@
-import type { App, DefineComponent } from 'vue'
+import type { App, DefineComponent, Ref } from 'vue'
 
 export interface VueOfficePdfProps {
   src: string | ArrayBuffer | Blob
@@ -10,7 +10,35 @@ export interface VueOfficePdfProps {
   defaultScale?: number
 }
 
-declare const VueOfficePdf: DefineComponent<VueOfficePdfProps> & {
+export type VueOfficePdfEmits = {
+  rendered: () => void
+  error: (error: unknown) => void
+}
+
+export interface VueOfficePdfExposed {
+  numPages: number
+  currentPage: number
+  userScale: number
+  rotation: number
+  getScale: () => Ref<number>
+  setScale: (scale: number) => void
+  getRotation: () => Ref<number>
+  setRotation: (deg: number) => void
+  scrollToPage: (page: number) => void
+  rerender: () => void
+  save: (fileName?: string) => void
+}
+
+declare const VueOfficePdf: DefineComponent<
+  VueOfficePdfProps,
+  VueOfficePdfExposed,
+  unknown,
+  Record<string, never>,
+  Record<string, never>,
+  Record<string, never>,
+  Record<string, never>,
+  VueOfficePdfEmits
+> & {
   install(app: App): void
 }
 

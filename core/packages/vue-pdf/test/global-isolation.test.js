@@ -8,10 +8,11 @@ const pdfMocks = vi.hoisted(() => {
       width: 100 * scale,
       height: 200 * scale
     })),
-    render: vi.fn(() => ({ promise: Promise.resolve() }))
+    render: vi.fn(() => ({ cancel: vi.fn(), promise: Promise.resolve() })),
+    cleanup: vi.fn()
   }
   const pdfDocument = {
-    destroy: vi.fn(),
+    destroy: vi.fn(() => Promise.resolve()),
     getPage: vi.fn(() => Promise.resolve(pdfPage)),
     numPages: 1
   }
@@ -38,6 +39,10 @@ describe('VueOfficePdf PDF.js 隔离', () => {
   let app
 
   beforeEach(() => {
+    vi.stubGlobal('ResizeObserver', class {
+      observe() {}
+      disconnect() {}
+    })
     pdfMocks.pdfDocument.numPages = 1
     pdfMocks.getDocument.mockReset()
     pdfMocks.getDocument.mockReturnValue({
@@ -118,7 +123,9 @@ describe('VueOfficePdf PDF.js 隔离', () => {
 
   it('私有 PDF.js 加载失败时通过 error 事件透传原始错误', async () => {
     const loadingError = new Error('invalid pdf')
+    const destroy = vi.fn(() => Promise.resolve())
     pdfMocks.getDocument.mockReturnValueOnce({
+      destroy,
       promise: Promise.reject(loadingError)
     })
     const onError = vi.fn()
@@ -134,5 +141,6 @@ describe('VueOfficePdf PDF.js 隔离', () => {
     app.mount(container)
 
     await vi.waitFor(() => expect(onError).toHaveBeenCalledWith(loadingError))
+    expect(destroy).toHaveBeenCalledTimes(1)
   })
 })

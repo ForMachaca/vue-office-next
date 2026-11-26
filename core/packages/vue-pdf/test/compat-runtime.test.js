@@ -1,8 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const runtimeMocks = vi.hoisted(() => ({
-  globalWorkerOptions: {},
-  workerInstances: []
+  globalWorkerOptions: {}
 }))
 
 vi.mock('pdfjs-dist/legacy/build/pdf.mjs', () => ({
@@ -11,16 +10,11 @@ vi.mock('pdfjs-dist/legacy/build/pdf.mjs', () => ({
   version: '5.7.284'
 }))
 
-vi.mock('pdfjs-dist/legacy/build/pdf.worker.min.mjs?worker', () => ({
-  default: class MockPdfWorker {
-    constructor(options) {
-      this.options = options
-      runtimeMocks.workerInstances.push(this)
-    }
-  }
+vi.mock('virtual:pdfjs-worker-url', () => ({
+  default: '/assets/pdf.worker.min.mjs'
 }))
 
-vi.mock('virtual:pdfjs-compat-resources', () => ({
+vi.mock('virtual:pdfjs-resources', () => ({
   default: {
     cMapUrl: {
       'Adobe-CNS1-0.bcmap': '/assets/cmaps/Adobe-CNS1-0.bcmap'
@@ -42,20 +36,17 @@ import {
 
 describe('PDF.js compat runtime', () => {
   afterEach(() => {
-    runtimeMocks.workerInstances.length = 0
-    Reflect.deleteProperty(runtimeMocks.globalWorkerOptions, 'workerPort')
+    Reflect.deleteProperty(runtimeMocks.globalWorkerOptions, 'workerSrc')
     vi.unstubAllGlobals()
   })
 
-  it('使用独立 workerPort 并复用同一 PDF.js runtime', async () => {
+  it('复用 PDF.js runtime，并由 PDF.js 按文档加载随包 Worker', async () => {
     const first = await loadPdfjsLib()
     const second = await loadPdfjsLib()
 
     expect(first).toBe(second)
-    expect(runtimeMocks.workerInstances).toHaveLength(1)
-    expect(runtimeMocks.globalWorkerOptions.workerPort).toBe(
-      runtimeMocks.workerInstances[0]
-    )
+    expect(runtimeMocks.globalWorkerOptions.workerSrc).toBe('/assets/pdf.worker.min.mjs')
+    expect(runtimeMocks.globalWorkerOptions.workerPort).toBeUndefined()
   })
 
   it('覆盖 compat 资源选项且保留其他调用参数', () => {
@@ -70,9 +61,9 @@ describe('PDF.js compat runtime', () => {
         url: '/files/report.pdf',
         width: 800,
         cMapPacked: true,
-        cMapUrl: 'compat://cmaps/',
-        standardFontDataUrl: 'compat://standard-fonts/',
-        wasmUrl: 'compat://wasm/',
+        cMapUrl: null,
+        standardFontDataUrl: null,
+        wasmUrl: null,
         useWorkerFetch: false,
         BinaryDataFactory: CompatBinaryDataFactory
       })

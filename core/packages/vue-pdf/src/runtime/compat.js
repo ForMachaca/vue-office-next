@@ -1,11 +1,11 @@
-import PdfWorker from 'pdfjs-dist/legacy/build/pdf.worker.min.mjs?worker';
-import resourceUrls from 'virtual:pdfjs-compat-resources';
+import workerSrc from 'virtual:pdfjs-worker-url';
+import resourceUrls from 'virtual:pdfjs-resources';
 
 let pdfjsLibPromise;
 
 export class CompatBinaryDataFactory {
     async fetch({ kind, filename }) {
-        const url = resourceUrls[kind]?.[filename];
+        const url = resourceUrls[kind][filename];
         if (!url) {
             throw new Error(`Unknown PDF.js compat resource: ${kind}/${filename}`);
         }
@@ -21,8 +21,11 @@ export class CompatBinaryDataFactory {
 export function loadPdfjsLib() {
     if (!pdfjsLibPromise) {
         pdfjsLibPromise = import('pdfjs-dist/legacy/build/pdf.mjs').then((pdfjsLib) => {
-            pdfjsLib.GlobalWorkerOptions.workerPort = new PdfWorker();
+            pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
             return pdfjsLib;
+        }).catch((error) => {
+            pdfjsLibPromise = null;
+            throw error;
         });
     }
 
@@ -32,10 +35,10 @@ export function loadPdfjsLib() {
 export function createDocumentOptions(options) {
     return {
         ...options,
-        cMapUrl: 'compat://cmaps/',
+        cMapUrl: null,
         cMapPacked: true,
-        standardFontDataUrl: 'compat://standard-fonts/',
-        wasmUrl: 'compat://wasm/',
+        standardFontDataUrl: null,
+        wasmUrl: null,
         useWorkerFetch: false,
         BinaryDataFactory: CompatBinaryDataFactory
     };

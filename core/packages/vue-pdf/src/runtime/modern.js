@@ -1,4 +1,42 @@
 let pdfjsLibPromise;
+let resourceUrlsPromise;
+
+function loadResourceUrls() {
+    if (!resourceUrlsPromise) {
+        resourceUrlsPromise = import('virtual:pdfjs-resources')
+            .then((mod) => mod.default)
+            .catch((error) => {
+                resourceUrlsPromise = null;
+                throw error;
+            });
+    }
+
+    return resourceUrlsPromise;
+}
+
+export class ModernBinaryDataFactory {
+    constructor({ cMapUrl, standardFontDataUrl, wasmUrl }) {
+        this.cMapUrl = cMapUrl;
+        this.standardFontDataUrl = standardFontDataUrl;
+        this.wasmUrl = wasmUrl;
+    }
+
+    async fetch({ kind, filename }) {
+        const baseUrl = this[kind];
+        const url = baseUrl
+            ? `${baseUrl}${filename}`
+            : (await loadResourceUrls())[kind][filename];
+        if (!url) {
+            throw new Error(`Unknown PDF.js resource: ${kind}/${filename}`);
+        }
+
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`Unable to load PDF.js resource: ${kind}/${filename}`);
+        }
+        return new Uint8Array(await response.arrayBuffer());
+    }
+}
 
 export function loadPdfjsLib() {
     if (!pdfjsLibPromise) {
@@ -8,6 +46,9 @@ export function loadPdfjsLib() {
         ]).then(([pdfjsLib, { default: workerSrc }]) => {
             pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
             return pdfjsLib;
+        }).catch((error) => {
+            pdfjsLibPromise = null;
+            throw error;
         });
     }
 
@@ -15,5 +56,13 @@ export function loadPdfjsLib() {
 }
 
 export function createDocumentOptions(options) {
-    return options;
+    if (options.BinaryDataFactory || (options.cMapUrl && options.standardFontDataUrl && options.wasmUrl)) {
+        return options;
+    }
+
+    return {
+        ...options,
+        useWorkerFetch: false,
+        BinaryDataFactory: ModernBinaryDataFactory
+    };
 }
